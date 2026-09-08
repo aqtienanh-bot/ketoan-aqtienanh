@@ -223,14 +223,16 @@ body.printing #app{display:none}
 #trial-ban{position:fixed;left:0;right:0;bottom:0;z-index:250;background:var(--warn);color:#fff;
   padding:8px 14px;font-size:12.5px;text-align:center;box-shadow:0 -2px 10px rgba(0,0,0,.15)}
 #trial-ban b{font-weight:700}
-#trial-ban button{background:#fff;color:var(--warn);border:0;border-radius:6px;padding:4px 12px;font-weight:700;font-size:12px;cursor:pointer;margin-left:4px}
-body.is-trial #main{padding-bottom:80px}
-#print-root .pdoc{position:relative}
-body.is-trial #print-root .pdoc::before{
-  content:"DÙNG THỬ";position:absolute;top:40%;left:0;right:0;text-align:center;
-  font-size:84px;font-weight:800;color:rgba(178,59,50,.13);transform:rotate(-24deg);letter-spacing:10px;pointer-events:none;z-index:0;
+#trial-ban button{background:#fff;color:var(--warn);border:0;border-radius:6px;padding:3px 10px;font-weight:700;font-size:12px;cursor:pointer}
+body.is-trial #main{padding-bottom:76px}
+@media print{
+  body.is-trial #print-root .pdoc::before{
+    content:"DÙNG THỬ";position:absolute;top:42%;left:0;right:0;text-align:center;
+    font-size:90px;font-weight:800;color:rgba(180,60,50,.12);transform:rotate(-24deg);letter-spacing:8px;pointer-events:none;
+  }
 }
-.pdoc .trial-note{margin-top:12px;text-align:center;font-size:9.5px;color:#b23b32;font-weight:700;letter-spacing:.5px}
+#print-root .pdoc{position:relative}
+.pdoc .trial-note{margin-top:10px;text-align:center;font-size:10px;color:#b23b32;font-weight:700;letter-spacing:1px}
 </style>
 
 <div id="app" class="hidden">
@@ -251,10 +253,10 @@ body.is-trial #print-root .pdoc::before{
 
 <div id="gate" class="overlay hidden">
   <div class="sheet">
-    <h2>Kích hoạt bản quyền</h2>
-    <p class="lead">Nhập <b>đúng tên đơn vị</b> (như trên giấy phép kinh doanh) và <b>mã kích hoạt</b> do nhà cung cấp cấp. Mỗi tên đơn vị có một mã riêng.</p>
+    <h2>Kích hoạt phần mềm</h2>
+    <p class="lead">Phần mềm kế toán <b>AQ Tiến Anh</b> cần mã kích hoạt gắn với <b>tên đơn vị</b>. Nhập đúng tên đơn vị như trên giấy phép và mã do nhà cung cấp cấp.</p>
     <div class="fld" style="margin-bottom:12px">
-      <label>Tên đơn vị / hộ kinh doanh</label>
+      <label>Tên đơn vị / cơ sở kinh doanh</label>
       <input id="g-name" placeholder="VD: CÔNG TY TNHH ABC" autocomplete="off">
     </div>
     <div class="fld">
@@ -263,10 +265,9 @@ body.is-trial #print-root .pdoc::before{
     </div>
     <div class="err" id="g-err"></div>
     <div style="display:flex;gap:10px;margin-top:14px">
-      <button class="btn ghost" id="g-cancel" style="flex:1">Dùng thử tiếp</button>
       <button class="btn" id="g-activate" style="flex:1">Kích hoạt</button>
     </div>
-    <p class="lead" id="g-buy" style="margin:14px 0 0;font-size:12px"></p>
+    <p class="lead" style="margin:14px 0 0;font-size:12px">Chưa có mã? Liên hệ nhà cung cấp và đọc chính xác tên đơn vị. Mỗi tên đơn vị có một mã riêng.</p>
   </div>
 </div>
 
@@ -292,8 +293,6 @@ body.is-trial #print-root .pdoc::before{
 <script>
 (function(){
 "use strict";
-/* ==== CẤU HÌNH NHÀ CUNG CẤP — sửa liên hệ bán hàng ở đây ==== */
-var VENDOR="Mua bản quyền / lấy mã: 0972 776 588 (Zalo) · aqtienanh@gmail.com";
 var LS_DB="aqkt_db_v1", LS_LIC="aqkt_lic_v1", LS_THEME="aqkt_theme";
 var MEM={},NOPERSIST=false;
 var store={
@@ -364,7 +363,12 @@ function blankDB(){
       cheDoKeToan:"Thông tư 133/2016/TT-BTC", donViTien:"VNĐ",
       ppXuatKho:"Bình quân gia quyền cuối kỳ", ppKhauHao:"Đường thẳng",
       keToanTruong:"NGUYỄN THỊ PHƯƠNG DUNG", nguoiLapBieu:"NGUYỄN THỊ PHƯƠNG DUNG",
-      kyTu:"2026-09-01", kyDen:"2026-09-30", thueTNDN:0.20, tonQuyDau:0
+      kyTu:"2026-09-01", kyDen:"2026-09-30", thueTNDN:0.20, tonQuyDau:0,
+      dtNamTruoc:0,
+      kyKhaiThue:"Theo quý", soLanKhai:"Lần đầu", lanBoSung:"",
+      vatKyTruoc:0, vatKhongChiuThue:0, vatDauVaoKhongDuocKT:0,
+      vatDieuChinhTang:0, vatDieuChinhGiam:0, vatThueNhanBanGiao:0,
+      vatBuTru:0, vatDeNghiHoan:0
     },
     reportAdj:{giamTru:0,thuNhapKhac:0,chiPhiKhac:0},
     staff:[
@@ -491,6 +495,19 @@ function stockRows(){
 function sumExpense(type,a,b){
   var s=0;DB.expenses.forEach(function(e){if(inRange(e.ngay,a,b)&&(!type||e.loai===type))s+=num(e.soTien);});return s;
 }
+/* Thuế suất TNDN phổ thông/ưu đãi theo doanh thu năm trước liền kề — Nghị định 320/2025/NĐ-CP (hiệu lực 15/12/2025, áp dụng từ kỳ tính thuế năm 2025):
+   doanh thu năm trước ≤ 3 tỷ: 15% · từ trên 3 tỷ đến 50 tỷ: 17% · còn lại: 20% (thuế suất phổ thông). */
+function ctitRate(doanhThuNamTruoc){
+  var dt=num(doanhThuNamTruoc);
+  if(dt<=0)return null;
+  if(dt<=3e9)return 0.15;
+  if(dt<=50e9)return 0.17;
+  return 0.20;
+}
+function thueTNDNRate(){
+  var r=ctitRate(co().dtNamTruoc);
+  return r==null?num(co().thueTNDN):r;
+}
 function kqkd(a,b){
   var dt=0,gv=0;
   DB.sales.forEach(function(s){if(inRange(s.ngay,a,b)){var c=saleCalc(s);dt+=c.doanhThu;gv+=c.giaVon;}});
@@ -499,9 +516,47 @@ function kqkd(a,b){
   var cpBH=sumExpense("Chi phí bán hàng",a,b),cpQL=sumExpense("Chi phí quản lý doanh nghiệp",a,b),cpTC=sumExpense("Chi phí tài chính",a,b),cpK=sumExpense("Chi phí khác",a,b)+cpKhacM;
   var lnThuan=lgop-cpBH-cpQL-cpTC;
   var truocThue=lnThuan+tnKhac-cpK;
-  var thue=Math.max(0,truocThue)*num(co().thueTNDN);
+  var thueSuat=thueTNDNRate();
+  var thue=Math.max(0,truocThue)*thueSuat;
   return {doanhThu:dt,giamTru:giamTru,dtThuan:dtt,giaVon:gv,laiGop:lgop,cpBH:cpBH,cpQL:cpQL,cpTC:cpTC,
-    lnThuan:lnThuan,tnKhac:tnKhac,cpKhac:cpK,truocThue:truocThue,thue:thue,sauThue:truocThue-thue};
+    lnThuan:lnThuan,tnKhac:tnKhac,cpKhac:cpK,truocThue:truocThue,thueSuat:thueSuat,thue:thue,sauThue:truocThue-thue};
+}
+/* ---------------- tờ khai thuế GTGT — Mẫu 01/GTGT (phương pháp khấu trừ)
+   Phụ lục II, Thông tư 89/2026/TT-BTC (thay thế Thông tư 80/2021/TT-BTC), áp dụng từ kỳ tính thuế 01/7/2026.
+   Thuế suất 8% là mức giảm tạm thời của thuế suất 10% (NĐ 174/2025/NĐ-CP đến hết 31/12/2026) nên
+   gộp doanh thu 8%+10% vào chung nhóm "thuế suất 10%" của tờ khai — tiền thuế lấy đúng theo mức thực tế từng dòng. */
+function vatDeclareCalc(a,b){
+  var c=co();
+  var muaVaoGT=0,muaVaoThue=0;
+  DB.purchases.forEach(function(p){if(inRange(p.ngay,a,b)){var cc=purchaseCalc(p);muaVaoGT+=cc.thanhTien;muaVaoThue+=cc.tienThue;}});
+  var dt0=0,dt5=0,th5=0,dtHigh=0,thHigh=0;
+  DB.sales.forEach(function(s){if(inRange(s.ngay,a,b)){
+    var cc=saleCalc(s),rate=num(s.thue);
+    if(rate<=0)dt0+=cc.doanhThu;
+    else if(Math.abs(rate-0.05)<1e-9){dt5+=cc.doanhThu;th5+=cc.tienThue;}
+    else {dtHigh+=cc.doanhThu;thHigh+=cc.tienThue;}
+  }});
+  var v26=Math.min(Math.max(0,num(c.vatKhongChiuThue)),dt0); // [26] doanh thu không chịu thuế (điều chỉnh thủ công, trừ trong nhóm 0%)
+  var v29=dt0-v26;                          // [29] doanh thu thuế suất 0%
+  var v27=v29+dt5+dtHigh;                    // [27] giá trị HHDV bán ra chịu thuế GTGT
+  var v34=v26+v27;                           // [34] tổng doanh thu HHDV bán ra
+  var tongThueBanRa=th5+thHigh;              // [31]+[33]
+  var v25=Math.max(0,muaVaoThue-Math.max(0,num(c.vatDauVaoKhongDuocKT))); // [25] thuế mua vào được khấu trừ kỳ này
+  var kyTruoc=num(c.vatKyTruoc);             // [22]
+  var dcTang=num(c.vatDieuChinhTang), dcGiam=num(c.vatDieuChinhGiam); // [37]/[38]
+  var nhanBanGiao=num(c.vatThueNhanBanGiao); // [39a]
+  var buTru=Math.max(0,num(c.vatBuTru));     // [40b]
+  var deNghiHoan=Math.max(0,num(c.vatDeNghiHoan)); // [42]
+  var phatSinh=tongThueBanRa-v25;            // [36]
+  var net=phatSinh-kyTruoc+dcTang-dcGiam-nhanBanGiao; // trước khi bù trừ [40b]
+  var p40a=Math.max(0,net);                  // [40a]
+  var p40=Math.max(0,p40a-buTru);            // [40] thuế còn phải nộp
+  var p41=Math.max(0,-net);                  // [41] thuế còn được khấu trừ
+  var p43=Math.max(0,p41-deNghiHoan);        // [43] chuyển kỳ sau
+  return {muaVaoGT:muaVaoGT,muaVaoThue:muaVaoThue,v25:v25,
+    dt0:v29,dt5:dt5,th5:th5,dtHigh:dtHigh,thHigh:thHigh,v26:v26,v27:v27,v34:v34,
+    tongThueBanRa:tongThueBanRa,kyTruoc:kyTruoc,dcTang:dcTang,dcGiam:dcGiam,nhanBanGiao:nhanBanGiao,
+    buTru:buTru,deNghiHoan:deNghiHoan,phatSinh:phatSinh,p40a:p40a,p40:p40,p41:p41,p43:p43};
 }
 function periodSummary(a,b){
   var dt=0,gv=0;
@@ -724,9 +779,18 @@ SCREENS.company=function(m){
   g.appendChild(el("div",{class:"sec-label",text:"Tham số tính toán"}));
   g.appendChild(fld("Kỳ báo cáo — từ ngày","kyTu","date"));
   g.appendChild(fld("Kỳ báo cáo — đến ngày","kyDen","date"));
-  g.appendChild(fld("Thuế suất thuế TNDN (vd 0.2 = 20%)","thueTNDN","text"));
+  g.appendChild(fld("Kỳ tính thuế GTGT","kyKhaiThue","text",false,["Theo tháng","Theo quý"]));
+  g.appendChild(fld("Lần khai","soLanKhai","text",false,["Lần đầu","Bổ sung"]));
+  g.appendChild(fld("Tổng doanh thu năm trước liền kề","dtNamTruoc","money"));
+  g.appendChild(fld("Thuế suất thuế TNDN thủ công (vd 0.2 = 20%, chỉ dùng khi chưa nhập doanh thu năm trước)","thueTNDN","text"));
   g.appendChild(fld("Tồn quỹ tiền mặt đầu kỳ","tonQuyDau","money"));
   card.appendChild(g);
+  var rateNote=el("p",{class:"lead",style:"margin-top:10px"});
+  var appliedRate=thueTNDNRate();
+  rateNote.innerHTML=num(c.dtNamTruoc)>0
+    ? "Theo Nghị định 320/2025/NĐ-CP, doanh thu năm trước <b>"+fmt(c.dtNamTruoc)+" ₫</b> → thuế suất TNDN áp dụng: <b>"+Math.round(appliedRate*100)+"%</b> (ghi đè ô thuế suất thủ công ở trên)."
+    : "Chưa nhập doanh thu năm trước — đang dùng thuế suất TNDN nhập tay: <b>"+Math.round(appliedRate*100)+"%</b>. Nhập doanh thu năm trước để phần mềm tự áp dụng mức ưu đãi 15%/17%/20% theo Nghị định 320/2025/NĐ-CP.";
+  card.appendChild(rateNote);
   m.appendChild(card);
 };
 
@@ -1069,7 +1133,7 @@ SCREENS.reports=function(m){
   // kỳ + tham số
   var bar=el("div",{class:"card card-pad"});bar.style.marginBottom="16px";
   var fg=el("div",{class:"form-grid"});
-  [["Từ ngày","kyTu","date",co()],["Đến ngày","kyDen","date",co()],["Thuế suất TNDN","thueTNDN","text",co()],
+  [["Từ ngày","kyTu","date",co()],["Đến ngày","kyDen","date",co()],["Thuế suất TNDN thủ công",'thueTNDN',"text",co()],
    ["Các khoản giảm trừ DT","giamTru","money",DB.reportAdj],["Thu nhập khác","thuNhapKhac","money",DB.reportAdj],["Chi phí khác (nhập tay)","chiPhiKhac","money",DB.reportAdj]]
   .forEach(function(x){
     var f=el("div",{class:"fld"});f.appendChild(el("label",{text:x[0]}));
@@ -1077,7 +1141,9 @@ SCREENS.reports=function(m){
     inp.addEventListener("change",function(){x[3][x[1]]=x[2]==="money"?num(inp.value):inp.value;x[3]._v=nowv();save();route();});
     f.appendChild(inp);fg.appendChild(f);
   });
-  bar.appendChild(fg);m.appendChild(bar);
+  bar.appendChild(fg);
+  if(num(co().dtNamTruoc)>0)bar.appendChild(el("p",{class:"lead",style:"margin-top:8px",html:"Thuế suất TNDN đang áp dụng theo doanh thu năm trước ("+fmt(co().dtNamTruoc)+" ₫, NĐ 320/2025/NĐ-CP): <b>"+Math.round(thueTNDNRate()*100)+"%</b> — ô \"Thuế suất TNDN thủ công\" ở trên đang bị ghi đè. Sửa ở màn hình Khai báo doanh nghiệp."}));
+  m.appendChild(bar);
 
   var r=kqkd(pr.a,pr.b);
   var rowsKQ=[
@@ -1093,7 +1159,7 @@ SCREENS.reports=function(m){
     ["Thu nhập khác","31",r.tnKhac],
     ["Chi phí khác","32",r.cpKhac],
     ["Tổng lợi nhuận kế toán trước thuế","40",r.truocThue,1],
-    ["Chi phí thuế thu nhập doanh nghiệp","50",r.thue],
+    ["Chi phí thuế thu nhập doanh nghiệp ("+Math.round(r.thueSuat*100)+"%)","50",r.thue],
     ["Lợi nhuận sau thuế thu nhập doanh nghiệp","60",r.sauThue,1]
   ];
   var c=el("div",{class:"card"});
@@ -1129,6 +1195,172 @@ SCREENS.reports=function(m){
     var y=yy-2+i;return {label:"Năm "+y,rng:periodSummary(y+"-01-01",y+"-12-31")};
   }));
 };
+
+/* ---------------- Tờ khai thuế GTGT — Mẫu 01/GTGT ---------------- */
+SCREENS.vatdeclare=function(m){
+  var pr=P(),c=co(),v=vatDeclareCalc(pr.a,pr.b);
+  m.appendChild(head("Tờ khai thuế GTGT (Mẫu 01/GTGT)",
+    "Phương pháp khấu trừ · Kỳ "+dmy(pr.a)+" – "+dmy(pr.b)+" ("+(c.kyKhaiThue||"Theo quý")+") · Phụ lục II, Thông tư 89/2026/TT-BTC",
+    [toolbarBtn("In tờ khai",function(){printVatDeclare()})]
+  ));
+
+  var adj=el("div",{class:"card card-pad"});adj.style.marginBottom="16px";
+  adj.appendChild(el("div",{class:"sec-label",text:"Chỉ tiêu cần đối chiếu / nhập tay",style:"margin-top:0"}));
+  var fg=el("div",{class:"form-grid"});
+  [["[22] Thuế GTGT còn được khấu trừ kỳ trước chuyển sang","vatKyTruoc"],
+   ["[26] Doanh thu KHÔNG chịu thuế GTGT (trong số dòng bán ghi 0%, nếu có)","vatKhongChiuThue"],
+   ["Thuế GTGT mua vào KHÔNG được khấu trừ (trừ vào [25])","vatDauVaoKhongDuocKT"],
+   ["[37] Điều chỉnh TĂNG thuế GTGT còn được khấu trừ các kỳ trước","vatDieuChinhTang"],
+   ["[38] Điều chỉnh GIẢM thuế GTGT còn được khấu trừ các kỳ trước","vatDieuChinhGiam"],
+   ["[39a] Thuế GTGT nhận bàn giao / từ dự án đầu tư, đơn vị phụ thuộc","vatThueNhanBanGiao"],
+   ["[40b] Thuế GTGT được bù trừ (dự án đầu tư / tờ khai 02/GTGT)","vatBuTru"],
+   ["[42] Số thuế đề nghị hoàn trong kỳ","vatDeNghiHoan"]]
+  .forEach(function(x){
+    var f=el("div",{class:"fld"});f.appendChild(el("label",{text:x[0]}));
+    var inp=el("input",{inputMode:"numeric"});inp.value=fmt(c[x[1]]);
+    inp.addEventListener("change",function(){c[x[1]]=num(inp.value);inp.value=fmt(c[x[1]]);c._v=nowv();save();route();});
+    f.appendChild(inp);fg.appendChild(f);
+  });
+  adj.appendChild(fg);
+  m.appendChild(adj);
+
+  function row(code,label,val,bold){
+    return "<tr><td style='"+(bold?"font-weight:700":"")+"'>"+esc(label)+"</td>"+
+      "<td style='text-align:center;width:60px'>"+esc(code||"")+"</td>"+
+      "<td class='num ro' style='"+(bold?"font-weight:700":"")+"'><span class=cell>"+fmt(val)+"</span></td></tr>";
+  }
+  var t=el("table",{class:"grid"});
+  t.innerHTML="<thead><tr><th>Chỉ tiêu</th><th style='width:60px'>Mã số</th><th class=num style='width:180px'>Số tiền (₫)</th></tr></thead>";
+  var tb=el("tbody");
+  tb.innerHTML=
+    row("23","Giá trị hàng hóa, dịch vụ mua vào (chưa thuế)",v.muaVaoGT)+
+    row("24","Thuế GTGT của hàng hóa, dịch vụ mua vào",v.muaVaoThue)+
+    row("25","Tổng số thuế GTGT được khấu trừ kỳ này",v.v25,1)+
+    row("26","Giá trị HHDV bán ra không chịu thuế GTGT",v.v26)+
+    row("29","— trong đó: doanh thu thuế suất 0%",v.dt0)+
+    row("30","— doanh thu thuế suất 5%",v.dt5)+
+    row("31","— thuế GTGT thuế suất 5%",v.th5)+
+    row("32","— doanh thu thuế suất 10% (gộp cả phần đang giảm còn 8% theo NĐ 174/2025/NĐ-CP)",v.dtHigh)+
+    row("33","— thuế GTGT thuế suất 10%/8%",v.thHigh)+
+    row("27","Giá trị HHDV bán ra chịu thuế GTGT",v.v27,1)+
+    row("34","Tổng doanh thu HHDV bán ra ([34]=[26]+[27])",v.v34,1)+
+    row("","Tổng thuế GTGT của HHDV bán ra ([31]+[33])",v.tongThueBanRa,1)+
+    row("36","Thuế GTGT phát sinh trong kỳ (đầu ra − [25])",v.phatSinh,1)+
+    row("22","Thuế GTGT còn được khấu trừ kỳ trước chuyển sang",v.kyTruoc)+
+    row("40","THUẾ GTGT CÒN PHẢI NỘP TRONG KỲ",v.p40,1)+
+    row("43","Thuế GTGT còn được khấu trừ chuyển kỳ sau",v.p43,1);
+  t.appendChild(tb);
+  var card=el("div",{class:"card"});card.appendChild(el("div",{class:"tablewrap"},t));
+  m.appendChild(card);
+  m.appendChild(el("p",{class:"lead",style:"margin-top:12px",html:
+    "Số liệu tự động tổng hợp từ các phiếu mua/bán đã nhập trong kỳ. Đây là bảng tính hỗ trợ — vui lòng đối chiếu với ứng dụng eTax/HTKK của cơ quan thuế trước khi nộp chính thức."}));
+};
+function printVatDeclare(){
+  var pr=P(),c=co(),v=vatDeclareCalc(pr.a,pr.b);
+  function r(code,label,val,bold){
+    return "<tr><td style='"+(bold?"font-weight:700":"")+"'>"+esc(label)+"</td><td style='text-align:center'>"+esc(code||"")+"</td>"+
+      "<td class=n style='"+(bold?"font-weight:700":"")+"'>"+fmt(val)+"</td></tr>";
+  }
+  var body=
+    r("[23]","Giá trị hàng hóa, dịch vụ mua vào (chưa thuế)",v.muaVaoGT)+
+    r("[24]","Thuế GTGT của hàng hóa, dịch vụ mua vào",v.muaVaoThue)+
+    r("[25]","Tổng số thuế GTGT được khấu trừ kỳ này",v.v25,1)+
+    r("[26]","Giá trị HHDV bán ra không chịu thuế GTGT",v.v26)+
+    r("[29]","Doanh thu thuế suất 0%",v.dt0)+
+    r("[30]","Doanh thu thuế suất 5%",v.dt5)+
+    r("[31]","Thuế GTGT thuế suất 5%",v.th5)+
+    r("[32]","Doanh thu thuế suất 10% (gồm phần giảm còn 8% theo NĐ 174/2025/NĐ-CP)",v.dtHigh)+
+    r("[33]","Thuế GTGT thuế suất 10%/8%",v.thHigh)+
+    r("[27]","Giá trị HHDV bán ra chịu thuế GTGT",v.v27,1)+
+    r("[34]","Tổng doanh thu HHDV bán ra",v.v34,1)+
+    r("[31]+[33]","Tổng thuế GTGT của HHDV bán ra",v.tongThueBanRa,1)+
+    r("[22]","Thuế GTGT còn được khấu trừ kỳ trước chuyển sang",v.kyTruoc)+
+    r("[36]","Thuế GTGT phát sinh trong kỳ",v.phatSinh,1)+
+    r("[37]","Điều chỉnh tăng thuế GTGT còn được khấu trừ các kỳ trước",v.dcTang)+
+    r("[38]","Điều chỉnh giảm thuế GTGT còn được khấu trừ các kỳ trước",v.dcGiam)+
+    r("[39a]","Thuế GTGT nhận bàn giao / từ dự án đầu tư",v.nhanBanGiao)+
+    r("[40b]","Thuế GTGT được bù trừ",v.buTru)+
+    r("[40]","THUẾ GTGT CÒN PHẢI NỘP TRONG KỲ",v.p40,1)+
+    r("[41]","Thuế GTGT chưa khấu trừ hết trong kỳ",v.p41)+
+    r("[42]","Số thuế đề nghị hoàn",v.deNghiHoan)+
+    r("[43]","Thuế GTGT còn được khấu trừ chuyển kỳ sau",v.p43,1);
+  var html="<div class=pdoc>"+coHeader("Mẫu số 01/GTGT — PL II, TT 89/2026/TT-BTC")+
+    "<h3 class=pt>TỜ KHAI THUẾ GIÁ TRỊ GIA TĂNG</h3>"+
+    "<div class=pt-sub>(Dành cho người nộp thuế tính thuế theo phương pháp khấu trừ)</div>"+
+    "<div class=meta>"+
+    "<div>["+(c.kyKhaiThue==="Theo tháng"?"01b] Kỳ tính thuế: Tháng "+(pr.a.slice(5,7))+"/"+pr.a.slice(0,4):"01b] Kỳ tính thuế: Quý — từ "+dmy(pr.a)+" đến "+dmy(pr.b))+"</div>"+
+    "<div>["+(c.soLanKhai==="Bổ sung"?"03] Tờ khai bổ sung":"02] Tờ khai lần đầu")+"</div>"+
+    "<div>[04] Người nộp thuế: <b>"+esc(c.ten||"")+"</b></div>"+
+    "<div>[05] Mã số thuế: <b>"+esc(c.mst||"")+"</b></div>"+
+    "<div>Địa chỉ: "+esc(c.diaChi||"")+"</div>"+
+    "</div>"+
+    "<table><thead><tr><th>Chỉ tiêu</th><th style='width:70px'>Mã số</th><th style='width:160px'>Số tiền (đồng)</th></tr></thead><tbody>"+body+"</tbody></table>"+
+    "<div class=treason>Số tiền thuế còn phải nộp bằng chữ: "+docTien(v.p40)+".</div>"+
+    "<p style='font-size:9.5px;font-style:italic;margin-top:6px'>Bảng tính do phần mềm kế toán tự tổng hợp từ chứng từ mua/bán đã nhập trong kỳ, theo mẫu 01/GTGT ban hành kèm Thông tư 89/2026/TT-BTC ngày 30/6/2026 của Bộ Tài chính (thay thế Thông tư 80/2021/TT-BTC), áp dụng từ kỳ tính thuế 01/7/2026. Người nộp thuế có trách nhiệm đối chiếu, rà soát số liệu và kê khai chính thức qua ứng dụng eTax/HTKK của Tổng cục Thuế trước khi nộp.</p>"+
+    sigBlock([["Người lập biểu",0,c.nguoiLapBieu],["Kế toán trưởng",0,c.keToanTruong],["Người nộp thuế / Đại diện pháp luật",1,c.chuHoTen]])+
+    licLine()+"</div>";
+  openPrint(html);
+}
+
+/* ---------------- Tờ khai / bảng tính thuế TNDN — tham chiếu Mẫu 03/TNDN ---------------- */
+SCREENS.citdeclare=function(m){
+  var pr=P(),r=kqkd(pr.a,pr.b);
+  m.appendChild(head("Bảng tính thuế TNDN (tham chiếu Mẫu 03/TNDN)",
+    "Kỳ "+dmy(pr.a)+" – "+dmy(pr.b)+" · thuế suất áp dụng "+Math.round(r.thueSuat*100)+"%",
+    [toolbarBtn("In bảng tính",function(){printCitDeclare()})]
+  ));
+  var rows=[
+    ["[A1]","Tổng lợi nhuận kế toán trước thuế TNDN",r.truocThue,1],
+    ["[B13]","Thu nhập chịu thuế từ sản xuất kinh doanh (chưa có điều chỉnh ưu đãi/chuyển lỗ)",Math.max(0,r.truocThue)],
+    ["[C4]","Thu nhập tính thuế",Math.max(0,r.truocThue)],
+    ["[C7]","Thuế suất thuế TNDN áp dụng",r.thueSuat*100],
+    ["[C9]/[C17]","THUẾ TNDN PHẢI NỘP",r.thue,1]
+  ];
+  var t=el("table",{class:"grid"});
+  t.innerHTML="<thead><tr><th>Chỉ tiêu</th><th style='width:70px'>Mã số</th><th class=num style='width:180px'>Giá trị</th></tr></thead>";
+  var tb=el("tbody");
+  rows.forEach(function(x){
+    var isPct=x[0]==="[C7]";
+    tb.innerHTML+="<tr><td style='"+(x[3]?"font-weight:700":"")+"'>"+esc(x[0])+"</td><td style='text-align:center'>"+esc(x[1])+"</td>"+
+      "<td class='num ro' style='"+(x[3]?"font-weight:700":"")+"'><span class=cell>"+(isPct?fmt2(x[2])+"%":fmt(x[2])+" ₫")+"</span></td></tr>";
+  });
+  t.appendChild(tb);
+  var card=el("div",{class:"card"});card.appendChild(el("div",{class:"tablewrap"},t));
+  m.appendChild(card);
+  m.appendChild(el("p",{class:"lead",style:"margin-top:12px",html:
+    "Bảng rút gọn theo cấu trúc Mẫu 03/TNDN (Phụ lục II, Thông tư 89/2026/TT-BTC), dùng doanh thu/chi phí đã ghi nhận trong phần mềm. "+
+    "Chưa bao gồm các điều chỉnh riêng của tờ khai quyết toán năm (ưu đãi thuế, chuyển lỗ các năm trước, trích quỹ KH&CN, thu nhập từ chuyển nhượng bất động sản...) — "+
+    "nếu doanh nghiệp có các khoản này, cần bổ sung thủ công khi lập tờ khai chính thức trên ứng dụng eTax/HTKK."}));
+};
+function printCitDeclare(){
+  var pr=P(),c=co(),r=kqkd(pr.a,pr.b);
+  function rr(code,label,val,bold,pct){
+    return "<tr><td style='"+(bold?"font-weight:700":"")+"'>"+esc(label)+"</td><td style='text-align:center'>"+esc(code)+"</td>"+
+      "<td class=n style='"+(bold?"font-weight:700":"")+"'>"+(pct?fmt2(val)+"%":fmt(val))+"</td></tr>";
+  }
+  var body=
+    rr("[A1]","Tổng lợi nhuận kế toán trước thuế TNDN",r.truocThue,1)+
+    rr("[B1]-[B8]","Điều chỉnh tăng/giảm theo luật thuế TNDN (chưa phát sinh)",0)+
+    rr("[B13]","Thu nhập chịu thuế từ hoạt động SXKD",Math.max(0,r.truocThue),1)+
+    rr("[C2]","Thu nhập miễn thuế",0)+
+    rr("[C3a]","Lỗ các kỳ trước chuyển sang",0)+
+    rr("[C4]","Thu nhập tính thuế",Math.max(0,r.truocThue),1)+
+    rr("[C7]","Thuế suất thuế TNDN áp dụng (%)",r.thueSuat*100,0,1)+
+    rr("[C9]/[C17]","THUẾ TNDN PHẢI NỘP TRONG KỲ",r.thue,1);
+  var html="<div class=pdoc>"+coHeader("Mẫu số 03/TNDN (rút gọn) — PL II, TT 89/2026/TT-BTC")+
+    "<h3 class=pt>BẢNG TÍNH THUẾ THU NHẬP DOANH NGHIỆP</h3>"+
+    "<div class=pt-sub>Kỳ: từ "+dmy(pr.a)+" đến "+dmy(pr.b)+" &nbsp;·&nbsp; Đơn vị tính: đồng</div>"+
+    "<div class=meta>"+
+    "<div>Người nộp thuế: <b>"+esc(c.ten||"")+"</b> &nbsp;·&nbsp; MST: <b>"+esc(c.mst||"")+"</b></div>"+
+    "<div>Căn cứ thuế suất: doanh thu năm trước liền kề "+fmt(c.dtNamTruoc)+" ₫ (Nghị định 320/2025/NĐ-CP)"+(num(c.dtNamTruoc)<=0?" — chưa nhập, đang dùng thuế suất thủ công":"")+"</div>"+
+    "</div>"+
+    "<table><thead><tr><th>Chỉ tiêu</th><th style='width:80px'>Mã số</th><th style='width:160px'>Giá trị</th></tr></thead><tbody>"+body+"</tbody></table>"+
+    "<div class=treason>Số thuế TNDN phải nộp bằng chữ: "+docTien(r.thue)+".</div>"+
+    "<p style='font-size:9.5px;font-style:italic;margin-top:6px'>Bảng tính rút gọn do phần mềm tự tổng hợp, tham chiếu cấu trúc Mẫu 03/TNDN ban hành kèm Thông tư 89/2026/TT-BTC (thay thế Thông tư 80/2021/TT-BTC) và thuế suất theo Nghị định 320/2025/NĐ-CP. Chưa gồm các phụ lục ưu đãi thuế, chuyển lỗ, trích quỹ KH&CN... Vui lòng hoàn thiện tờ khai chính thức trên eTax/HTKK trước khi nộp.</p>"+
+    sigBlock([["Người lập biểu",0,c.nguoiLapBieu],["Kế toán trưởng",0,c.keToanTruong],["Người đại diện pháp luật",1,c.chuHoTen]])+
+    licLine()+"</div>";
+  openPrint(html);
+}
 function summaryTable(n,fn){
   var t=el("table",{class:"grid"});
   t.innerHTML="<thead><tr><th style='width:120px'>Kỳ</th><th class=num>Doanh thu</th><th class=num>Giá vốn</th><th class=num>Lãi gộp</th><th class=num>Chi phí</th><th class=num>LN trước thuế</th></tr></thead>";
@@ -1192,11 +1424,6 @@ function sigBlock(cols){
 }
 function openPrint(html){
   var pr=$("#print-root");pr.innerHTML=html;
-  if(isTrial()){
-    Array.prototype.forEach.call(pr.querySelectorAll(".pdoc"),function(d){
-      d.insertAdjacentHTML("beforeend","<div class=trial-note>• BẢN DÙNG THỬ — CHƯA KÍCH HOẠT • "+esc(VENDOR)+" •</div>");
-    });
-  }
   document.body.classList.add("printing");
   if(!$("#print-bar")){
     var bar=el("div",{id:"print-bar",class:"print-toolbar"});
@@ -1291,7 +1518,7 @@ function printReport(){
    ["Chi phí quản lý doanh nghiệp","22",r.cpQL],["Chi phí tài chính","23",r.cpTC],
    ["Lợi nhuận thuần từ hoạt động kinh doanh","30",r.lnThuan],["Thu nhập khác","31",r.tnKhac],
    ["Chi phí khác","32",r.cpKhac],["Tổng lợi nhuận kế toán trước thuế","40",r.truocThue],
-   ["Chi phí thuế thu nhập doanh nghiệp","50",r.thue],["Lợi nhuận sau thuế thu nhập doanh nghiệp","60",r.sauThue]];
+   ["Chi phí thuế thu nhập doanh nghiệp ("+Math.round(r.thueSuat*100)+"%)","50",r.thue],["Lợi nhuận sau thuế thu nhập doanh nghiệp","60",r.sauThue]];
   var body=L.map(function(x){var bold=["10","20","30","40","60"].indexOf(x[1])>=0;
     return "<tr><td style='"+(bold?"font-weight:700":"")+"'>"+esc(x[0])+"</td><td style='text-align:center'>"+x[1]+"</td><td class=n style='"+(bold?"font-weight:700":"")+"'>"+fmt(x[2])+"</td></tr>";
   }).join("");
@@ -1319,7 +1546,8 @@ var NAV=[
   ["Điều hành",[["dashboard","Tổng quan"]]],
   ["Khai báo",[["company","Doanh nghiệp"],["staff","Nhân sự"],["partners","Đối tác"],["materials","Danh mục vật tư"],["goods","Danh mục hàng hóa"]]],
   ["Chứng từ",[["purchases","Phiếu mua hàng"],["sales","Phiếu bán hàng"],["expenses","Chi phí"],["cashbook","Sổ quỹ tiền mặt"]]],
-  ["Sổ & Báo cáo",[["stock","Sổ kho NXT"],["reports","Báo cáo KQKD"]]]
+  ["Sổ & Báo cáo",[["stock","Sổ kho NXT"],["reports","Báo cáo KQKD"]]],
+  ["Tờ khai thuế",[["vatdeclare","Tờ khai thuế GTGT"],["citdeclare","Bảng tính thuế TNDN"]]]
 ];
 function buildNav(){
   var n=$("#nav");n.innerHTML="";
@@ -1344,59 +1572,50 @@ function route(){
   $("#tb-co").textContent=co().ten||"—";
 }
 
-/* ---------------- bản quyền: dùng thử mặc định, nhập mã để mở khoá ---------------- */
+/* ---------------- kích hoạt bản quyền (gắn tên đơn vị) ---------------- */
 function getLic(){try{return JSON.parse(store.get(LS_LIC))}catch(e){return null}}
 function setLic(l){store.set(LS_LIC,JSON.stringify(l));}
 function licHashOK(l){return !!(l&&window.AQLicense&&AQLicense.verify(l.name,l.code));}
 function licNorm(s){return window.AQLicense?AQLicense.norm(s):String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,"");}
-/* Bản quyền hợp lệ khi: mã đúng tên + đúng thiết bị + tên trên giấy phép trùng tên đơn vị hiện tại */
-function licOK(){
+/* hợp lệ khi: mã đúng tên + đúng thiết bị + tên trên giấy phép TRÙNG tên đơn vị hiện tại */
+function licReason(){
   var l=getLic();
-  if(!licHashOK(l))return false;
-  if(l.dev&&l.dev!==deviceId())return false;
+  if(!licHashOK(l))return l&&l.name?"bad":"none";
+  if(l.dev&&l.dev!==deviceId())return "device";
   var cur=(co().ten||"").trim();
-  if(cur&&licNorm(l.name)!==licNorm(cur))return false;
-  return true;
+  if(cur&&licNorm(l.name)!==licNorm(cur))return "name";
+  return "";
 }
-function isTrial(){return !licOK();}
+function licOK(){return licReason()==="";}
 function checkLicenseBadge(){
-  var b=$("#tb-lic");if(!b)return;
-  if(licOK()){b.textContent="✓ Bản quyền";b.className="pill ok";b.title="Cấp cho: "+((getLic()||{}).name||co().ten);}
-  else{b.textContent="Dùng thử";b.className="pill demo";b.title="Chưa kích hoạt — bấm để nhập mã / mua bản quyền";}
+  var b=$("#tb-lic");if(!b)return;var l=getLic();
+  if(licOK()){b.textContent="✓ Bản quyền";b.className="pill ok";b.title="Cấp cho: "+(l&&l.name||co().ten);}
+  else{b.textContent="Chưa kích hoạt";b.className="pill demo";}
 }
-function applyTrialUI(){
-  var t=isTrial();
-  document.body.classList.toggle("is-trial",t);
-  var ban=$("#trial-ban");
-  if(t){
-    if(!ban){ban=el("div",{id:"trial-ban"});document.body.appendChild(ban);}
-    ban.innerHTML="<b>BẢN DÙNG THỬ</b> — dùng đủ chức năng, nhưng phiếu &amp; báo cáo in ra có chữ mờ “DÙNG THỬ”. &nbsp;"
-      +esc(VENDOR)+" &nbsp;<button id='trial-key'>Nhập mã kích hoạt</button>";
-    var bk=$("#trial-key");if(bk)bk.onclick=openGate;
-  }else if(ban){ban.remove();}
-  checkLicenseBadge();
-}
-function openGate(){
-  var g=$("#gate");g.classList.remove("hidden");
-  $("#g-err").textContent="";
-  var bp=$("#g-buy");if(bp)bp.textContent=VENDOR;
-  var l=getLic();
-  $("#g-name").value=co().ten||(l&&l.name)||"";
-  $("#g-code").value="";
-  $("#g-cancel").onclick=function(){g.classList.add("hidden");};
+function wireGate(msg){
+  $("#gate").classList.remove("hidden");
+  var e=$("#g-err");if(e)e.textContent=msg||"";
+  $("#g-name").value=co().ten||(getLic()&&getLic().name)||"";
   $("#g-activate").onclick=function(){
     var name=$("#g-name").value.trim(),code=$("#g-code").value.trim();
     if(!name){$("#g-err").textContent="Nhập tên đơn vị.";return;}
-    if(!AQLicense.verify(name,code)){$("#g-err").textContent="Mã không đúng với tên đơn vị này. Kiểm tra lại tên (đúng như giấy phép) và mã.";return;}
+    if(!AQLicense.verify(name,code)){$("#g-err").textContent="Mã kích hoạt không đúng với tên đơn vị này. Kiểm tra lại tên (viết đúng như giấy phép) và mã.";return;}
     setLic({name:name,code:code.toUpperCase(),at:today(),dev:deviceId()});
     DB.company.ten=name;co()._v=nowv();save();
-    g.classList.add("hidden");
-    toast("Đã kích hoạt bản quyền. Cảm ơn bạn!");
-    applyTrialUI();$("#tb-co").textContent=co().ten||"—";
+    $("#gate").classList.add("hidden");startApp();
   };
-  $("#g-code").onkeydown=function(e){if(e.key==="Enter")$("#g-activate").click();};
+  $("#g-code").onkeydown=function(e){if(e.key==="Enter")$("#g-activate").click()};
 }
-function bootGate(){startApp();applyTrialUI();}
+function bootGate(){
+  var r=licReason();
+  if(r===""){$("#gate").classList.add("hidden");startApp();return;}
+  var msg={
+    device:"Giấy phép này đã kích hoạt trên thiết bị/trình duyệt khác. Nhập lại mã để dùng trên máy này.",
+    name:"Mã đang lưu là của đơn vị “"+((getLic()||{}).name||"")+"”, khác với đơn vị “"+(co().ten||"")+"”. Nhập mã đúng cho đơn vị này.",
+    bad:"Mã đã lưu không khớp tên đơn vị. Nhập lại mã đúng."
+  }[r]||"";
+  wireGate(msg);
+}
 function startApp(){
   $("#app").classList.remove("hidden");
   buildNav();checkLicenseBadge();
@@ -1407,7 +1626,6 @@ function startApp(){
   back.addEventListener("click",closeNav);
   nav.addEventListener("click",function(e){if(e.target.closest("a"))closeNav();});
   route();save();
-  $("#tb-lic").addEventListener("click",openGate);
   $("#tb-theme").addEventListener("click",function(){
     var cur=document.documentElement.getAttribute("data-theme");
     var next=cur==="dark"?"light":(cur==="light"?"dark":(matchMedia("(prefers-color-scheme:dark)").matches?"light":"dark"));
