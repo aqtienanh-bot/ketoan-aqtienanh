@@ -79,7 +79,13 @@ a{color:var(--accent)}
 /* ---------- cards / grid ---------- */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
 .card-pad{padding:18px}
-.tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);-webkit-overflow-scrolling:touch}
+.tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);-webkit-overflow-scrolling:touch;scrollbar-width:auto;scrollbar-color:var(--border-strong) var(--surface-2)}
+.tablewrap::-webkit-scrollbar{height:11px}
+.tablewrap::-webkit-scrollbar-track{background:var(--surface-2)}
+.tablewrap::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:6px;border:2px solid var(--surface-2)}
+.tablewrap::-webkit-scrollbar-thumb:hover{background:var(--ink-faint)}
+.tablewrap.scrollhint{position:relative}
+.scroll-note{font-size:11.5px;color:var(--ink-faint);margin:-6px 0 8px;display:flex;align-items:center;gap:5px}
 table.grid{border-collapse:collapse;width:100%;font-size:13.5px}
 table.grid.wide{min-width:100%;table-layout:fixed}
 table.grid.wide td .cell{white-space:normal;word-break:break-word}
@@ -106,6 +112,16 @@ table.grid tfoot td.num{text-align:right;font-family:var(--mono)}
 .warn-chip{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700;background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad);margin:0 8px}
 .muted{color:var(--ink-faint)}
 .empty{padding:26px;text-align:center;color:var(--ink-faint)}
+
+/* ---------- bảng tờ khai thuế: nhóm chỉ tiêu / thụt dòng chỉ tiêu con ---------- */
+table.grid td.code{text-align:center;font-family:var(--mono);color:var(--ink-soft);width:76px;white-space:nowrap}
+table.grid tr.sub td{color:var(--ink-soft);font-weight:400}
+table.grid tr.sub td:first-child .cell,table.grid tr.sub td:first-child{padding-left:26px}
+table.grid tr.grp td{background:var(--surface-3);color:var(--ink-soft);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:8px 10px}
+table.grid tr.grp:first-child td{border-top:0}
+.pdoc table td.code{text-align:center;width:60px;white-space:nowrap}
+.pdoc table tr.sub td:first-child{padding-left:20px;color:#444;font-weight:400}
+.pdoc table tr.grp td{background:#eee;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em}
 
 /* ---------- form (company) ---------- */
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 22px}
@@ -368,7 +384,10 @@ function blankDB(){
       kyKhaiThue:"Theo quý", soLanKhai:"Lần đầu", lanBoSung:"",
       vatKyTruoc:0, vatKhongChiuThue:0, vatDauVaoKhongDuocKT:0,
       vatDieuChinhTang:0, vatDieuChinhGiam:0, vatThueNhanBanGiao:0,
-      vatBuTru:0, vatDeNghiHoan:0
+      vatBuTru:0, vatDeNghiHoan:0,
+      citDieuChinhTang:0, citDieuChinhGiam:0, citThuNhapBDS:0,
+      citMienThue:0, citLoKyTruoc:0, citLoBDSBuTru:0,
+      citTrichQuyKHCN:0, citMienGiamThue:0, citTamNopTrongNam:0
     },
     reportAdj:{giamTru:0,thuNhapKhac:0,chiPhiKhac:0},
     staff:[
@@ -571,6 +590,17 @@ function cashRunning(){
   return {rows:DB.cashbook,end:bal};
 }
 
+/* bọc bảng rộng + tự hiện gợi ý "cuộn ngang" khi bảng tràn khỏi khung nhìn */
+function addScrollHint(wrap){
+  var hint=el("div",{class:"scroll-note",html:"↔ Bảng còn cột ở bên phải — kéo thanh cuộn ngang phía dưới bảng để xem đủ"});
+  hint.hidden=true;
+  var outer=el("div");outer.appendChild(hint);outer.appendChild(wrap);
+  function check(){hint.hidden=wrap.scrollWidth<=wrap.clientWidth+2;}
+  if(window.ResizeObserver)new ResizeObserver(check).observe(wrap);
+  else{check();window.addEventListener("resize",check);}
+  return outer;
+}
+function tw(inner){return addScrollHint(el("div",{class:"tablewrap"},inner));}
 /* ---------------- generic editable grid ---------------- */
 function grid(opts){
   // opts: cols[{k,label,type,w,opts,ro,calc,fmt,cls}], rows(), add(), title, foot(rows)
@@ -645,7 +675,7 @@ function grid(opts){
   function commit(){save();renderBody();if(opts.onchange)opts.onchange();}
   wrap.appendChild(tbl);
   renderBody();
-  return {node:wrap,refresh:renderBody};
+  return {node:addScrollHint(wrap),refresh:renderBody};
 }
 
 function toolbarBtn(label,fn,ghost){var b=el("button",{class:"btn "+(ghost?"ghost":"")+" sm"});b.textContent=label;b.addEventListener("click",fn);return b;}
@@ -710,14 +740,14 @@ SCREENS.dashboard=function(m){
   var c1=el("div",{class:"card card-pad"});c1.appendChild(el("h3",{text:"Hàng bán chạy trong kỳ",style:"font-size:14px;margin-bottom:10px"}));
   if(top.length){var t=el("table",{class:"grid"});t.innerHTML="<thead><tr><th>Mã</th><th>Tên</th><th class=num>SL</th><th class=num>Doanh thu</th></tr></thead>";
     var tb=el("tbody");top.forEach(function(x){tb.innerHTML+="<tr><td><span class=cell>"+esc(x.ma)+"</span></td><td><span class=cell>"+esc(x.ten)+"</span></td><td class='num ro'><span class=cell>"+fmt2(x.sl)+"</span></td><td class='num ro'><span class=cell>"+fmt(x.dt)+"</span></td></tr>";});
-    t.appendChild(tb);c1.appendChild(el("div",{class:"tablewrap"},t));
+    t.appendChild(tb);c1.appendChild(tw(t));
   }else c1.appendChild(el("div",{class:"empty",text:"Chưa có phiếu bán trong kỳ."}));
   two.appendChild(c1);
   // cảnh báo tồn
   var c2=el("div",{class:"card card-pad"});c2.appendChild(el("h3",{text:"Cảnh báo tồn kho thấp",style:"font-size:14px;margin-bottom:10px"}));
   if(low.length){var t2=el("table",{class:"grid"});t2.innerHTML="<thead><tr><th>Mã</th><th>Tên</th><th class=num>Tồn cuối</th><th class=num>Định mức</th></tr></thead>";
     var tb2=el("tbody");low.forEach(function(x){tb2.innerHTML+="<tr><td><span class=cell>"+esc(x.ma)+"</span></td><td><span class=cell>"+esc(x.ten)+"</span></td><td class='num ro'><span class=cell>"+fmt2(x.slCuoi)+"</span></td><td class='num ro'><span class=cell>"+fmt2(x.dinhMuc)+"</span></td></tr>";});
-    t2.appendChild(tb2);c2.appendChild(el("div",{class:"tablewrap"},t2));
+    t2.appendChild(tb2);c2.appendChild(tw(t2));
   }else c2.appendChild(el("div",{class:"empty",text:"Không có mặt hàng nào dưới định mức."}));
   two.appendChild(c2);
   m.appendChild(two);
@@ -1122,7 +1152,7 @@ SCREENS.stock=function(m){
   var tf=el("tfoot");tf.innerHTML="<tr><td></td><td></td><td>TỔNG CỘNG</td><td></td><td></td>"+
     "<td class=num></td>"+td(fmt(F.gtriDau))+"<td class=num></td>"+td(fmt(F.gtriNhap))+"<td class=num></td><td class=num></td>"+td(fmt(F.gtriXuat))+"<td class=num></td>"+td(fmt(F.gtriCuoi))+"<td></td></tr>";
   t.appendChild(tf);
-  m.appendChild(el("div",{class:"tablewrap"},t));
+  m.appendChild(tw(t));
 };
 
 SCREENS.reports=function(m){
@@ -1171,7 +1201,7 @@ SCREENS.reports=function(m){
       "<td><span class=cell style='text-align:center'>"+x[1]+"</span></td>"+
       "<td class='num ro'><span class=cell style='"+(x[4]?"font-weight:700":"")+(x[2]<0?";color:var(--bad)":"")+"'>"+fmt(x[2])+"</span></td></tr>";
   });
-  t.appendChild(tb);c.appendChild(el("div",{class:"tablewrap"},t));
+  t.appendChild(tb);c.appendChild(tw(t));
   m.appendChild(c);
 
   // theo tháng
@@ -1197,6 +1227,56 @@ SCREENS.reports=function(m){
 };
 
 /* ---------------- Tờ khai thuế GTGT — Mẫu 01/GTGT ---------------- */
+function vatDeclareRows(v){
+  return [
+    {grp:"Hàng hóa, dịch vụ mua vào"},
+    {code:"23",label:"Giá trị hàng hóa, dịch vụ mua vào (chưa thuế)",val:v.muaVaoGT},
+    {code:"24",label:"Thuế GTGT của hàng hóa, dịch vụ mua vào",val:v.muaVaoThue},
+    {code:"25",label:"Tổng số thuế GTGT được khấu trừ kỳ này",val:v.v25,bold:1},
+    {grp:"Hàng hóa, dịch vụ bán ra"},
+    {code:"26",label:"Giá trị HHDV bán ra không chịu thuế GTGT",val:v.v26},
+    {code:"29",label:"Doanh thu thuế suất 0%",val:v.dt0,sub:1},
+    {code:"30",label:"Doanh thu thuế suất 5%",val:v.dt5,sub:1},
+    {code:"31",label:"Thuế GTGT thuế suất 5%",val:v.th5,sub:1},
+    {code:"32",label:"Doanh thu thuế suất 10% (gồm phần đang giảm còn 8% theo NĐ 174/2025/NĐ-CP)",val:v.dtHigh,sub:1},
+    {code:"33",label:"Thuế GTGT thuế suất 10%/8%",val:v.thHigh,sub:1},
+    {code:"27",label:"Giá trị HHDV bán ra chịu thuế GTGT ([27]=[29]+[30]+[32])",val:v.v27,bold:1},
+    {code:"34",label:"Tổng doanh thu HHDV bán ra ([34]=[26]+[27])",val:v.v34,bold:1},
+    {code:"31+33",label:"Tổng thuế GTGT của HHDV bán ra",val:v.tongThueBanRa,bold:1},
+    {grp:"Xác định thuế GTGT phải nộp / còn được khấu trừ"},
+    {code:"36",label:"Thuế GTGT phát sinh trong kỳ (đầu ra − [25])",val:v.phatSinh,bold:1},
+    {code:"22",label:"Thuế GTGT còn được khấu trừ kỳ trước chuyển sang",val:v.kyTruoc},
+    {code:"37",label:"Điều chỉnh tăng thuế còn được khấu trừ các kỳ trước",val:v.dcTang,sub:1},
+    {code:"38",label:"Điều chỉnh giảm thuế còn được khấu trừ các kỳ trước",val:v.dcGiam,sub:1},
+    {code:"39a",label:"Thuế nhận bàn giao / từ dự án đầu tư, đơn vị phụ thuộc",val:v.nhanBanGiao,sub:1},
+    {code:"40b",label:"Thuế được bù trừ (dự án đầu tư / tờ khai 02/GTGT)",val:v.buTru,sub:1},
+    {code:"40",label:"THUẾ GTGT CÒN PHẢI NỘP TRONG KỲ",val:v.p40,bold:1},
+    {code:"41",label:"Thuế GTGT chưa khấu trừ hết trong kỳ",val:v.p41},
+    {code:"42",label:"Số thuế đề nghị hoàn",val:v.deNghiHoan,sub:1},
+    {code:"43",label:"Thuế GTGT còn được khấu trừ chuyển kỳ sau",val:v.p43,bold:1}
+  ];
+}
+function taxRowsHtml(rows,forPrint){
+  return rows.map(function(x){
+    if(x.grp)return "<tr class=grp><td colspan=3>"+esc(x.grp)+"</td></tr>";
+    var cls=x.sub?" class=sub":"";
+    var w=x.bold?"font-weight:700":"";
+    var codeTxt=x.code?"["+esc(x.code)+"]":"";
+    if(forPrint){
+      return "<tr"+cls+"><td style='"+w+"'>"+esc(x.label)+"</td><td style='text-align:center'>"+codeTxt+"</td>"+
+        "<td class=n style='"+w+"'>"+(x.pct?fmt2(x.val)+"%":fmt(x.val))+"</td></tr>";
+    }
+    return "<tr"+cls+"><td style='"+w+"'>"+esc(x.label)+"</td><td class=code>"+codeTxt+"</td>"+
+      "<td class='num ro' style='"+w+"'><span class=cell>"+(x.pct?fmt2(x.val)+"%":fmt(x.val))+"</span></td></tr>";
+  }).join("");
+}
+function adjField(host,label,key){
+  var c=co();
+  var f=el("div",{class:"fld"});f.appendChild(el("label",{text:label}));
+  var inp=el("input",{inputMode:"numeric"});inp.value=fmt(c[key]);
+  inp.addEventListener("change",function(){c[key]=num(inp.value);inp.value=fmt(c[key]);c._v=nowv();save();route();});
+  f.appendChild(inp);host.appendChild(f);
+}
 SCREENS.vatdeclare=function(m){
   var pr=P(),c=co(),v=vatDeclareCalc(pr.a,pr.b);
   m.appendChild(head("Tờ khai thuế GTGT (Mẫu 01/GTGT)",
@@ -1205,86 +1285,38 @@ SCREENS.vatdeclare=function(m){
   ));
 
   var adj=el("div",{class:"card card-pad"});adj.style.marginBottom="16px";
-  adj.appendChild(el("div",{class:"sec-label",text:"Chỉ tiêu cần đối chiếu / nhập tay",style:"margin-top:0"}));
-  var fg=el("div",{class:"form-grid"});
+  adj.appendChild(el("div",{class:"sec-label",text:"Điều chỉnh — mua vào",style:"margin-top:0"}));
+  var fg1=el("div",{class:"form-grid"});
+  adjField(fg1,"Thuế GTGT mua vào KHÔNG được khấu trừ (trừ vào [25])","vatDauVaoKhongDuocKT");
+  adj.appendChild(fg1);
+  adj.appendChild(el("div",{class:"sec-label",text:"Điều chỉnh — bán ra"}));
+  var fg2=el("div",{class:"form-grid"});
+  adjField(fg2,"[26] Doanh thu KHÔNG chịu thuế (tách khỏi các dòng bán ghi 0%, nếu có)","vatKhongChiuThue");
+  adj.appendChild(fg2);
+  adj.appendChild(el("div",{class:"sec-label",text:"Điều chỉnh — xác định số thuế phải nộp / hoàn thuế"}));
+  var fg3=el("div",{class:"form-grid"});
   [["[22] Thuế GTGT còn được khấu trừ kỳ trước chuyển sang","vatKyTruoc"],
-   ["[26] Doanh thu KHÔNG chịu thuế GTGT (trong số dòng bán ghi 0%, nếu có)","vatKhongChiuThue"],
-   ["Thuế GTGT mua vào KHÔNG được khấu trừ (trừ vào [25])","vatDauVaoKhongDuocKT"],
-   ["[37] Điều chỉnh TĂNG thuế GTGT còn được khấu trừ các kỳ trước","vatDieuChinhTang"],
-   ["[38] Điều chỉnh GIẢM thuế GTGT còn được khấu trừ các kỳ trước","vatDieuChinhGiam"],
-   ["[39a] Thuế GTGT nhận bàn giao / từ dự án đầu tư, đơn vị phụ thuộc","vatThueNhanBanGiao"],
-   ["[40b] Thuế GTGT được bù trừ (dự án đầu tư / tờ khai 02/GTGT)","vatBuTru"],
+   ["[37] Điều chỉnh TĂNG thuế còn được khấu trừ các kỳ trước","vatDieuChinhTang"],
+   ["[38] Điều chỉnh GIẢM thuế còn được khấu trừ các kỳ trước","vatDieuChinhGiam"],
+   ["[39a] Thuế nhận bàn giao / từ dự án đầu tư, đơn vị phụ thuộc","vatThueNhanBanGiao"],
+   ["[40b] Thuế được bù trừ (dự án đầu tư / tờ khai 02/GTGT)","vatBuTru"],
    ["[42] Số thuế đề nghị hoàn trong kỳ","vatDeNghiHoan"]]
-  .forEach(function(x){
-    var f=el("div",{class:"fld"});f.appendChild(el("label",{text:x[0]}));
-    var inp=el("input",{inputMode:"numeric"});inp.value=fmt(c[x[1]]);
-    inp.addEventListener("change",function(){c[x[1]]=num(inp.value);inp.value=fmt(c[x[1]]);c._v=nowv();save();route();});
-    f.appendChild(inp);fg.appendChild(f);
-  });
-  adj.appendChild(fg);
+  .forEach(function(x){adjField(fg3,x[0],x[1]);});
+  adj.appendChild(fg3);
   m.appendChild(adj);
 
-  function row(code,label,val,bold){
-    return "<tr><td style='"+(bold?"font-weight:700":"")+"'>"+esc(label)+"</td>"+
-      "<td style='text-align:center;width:60px'>"+esc(code||"")+"</td>"+
-      "<td class='num ro' style='"+(bold?"font-weight:700":"")+"'><span class=cell>"+fmt(val)+"</span></td></tr>";
-  }
   var t=el("table",{class:"grid"});
-  t.innerHTML="<thead><tr><th>Chỉ tiêu</th><th style='width:60px'>Mã số</th><th class=num style='width:180px'>Số tiền (₫)</th></tr></thead>";
-  var tb=el("tbody");
-  tb.innerHTML=
-    row("23","Giá trị hàng hóa, dịch vụ mua vào (chưa thuế)",v.muaVaoGT)+
-    row("24","Thuế GTGT của hàng hóa, dịch vụ mua vào",v.muaVaoThue)+
-    row("25","Tổng số thuế GTGT được khấu trừ kỳ này",v.v25,1)+
-    row("26","Giá trị HHDV bán ra không chịu thuế GTGT",v.v26)+
-    row("29","— trong đó: doanh thu thuế suất 0%",v.dt0)+
-    row("30","— doanh thu thuế suất 5%",v.dt5)+
-    row("31","— thuế GTGT thuế suất 5%",v.th5)+
-    row("32","— doanh thu thuế suất 10% (gộp cả phần đang giảm còn 8% theo NĐ 174/2025/NĐ-CP)",v.dtHigh)+
-    row("33","— thuế GTGT thuế suất 10%/8%",v.thHigh)+
-    row("27","Giá trị HHDV bán ra chịu thuế GTGT",v.v27,1)+
-    row("34","Tổng doanh thu HHDV bán ra ([34]=[26]+[27])",v.v34,1)+
-    row("","Tổng thuế GTGT của HHDV bán ra ([31]+[33])",v.tongThueBanRa,1)+
-    row("36","Thuế GTGT phát sinh trong kỳ (đầu ra − [25])",v.phatSinh,1)+
-    row("22","Thuế GTGT còn được khấu trừ kỳ trước chuyển sang",v.kyTruoc)+
-    row("40","THUẾ GTGT CÒN PHẢI NỘP TRONG KỲ",v.p40,1)+
-    row("43","Thuế GTGT còn được khấu trừ chuyển kỳ sau",v.p43,1);
-  t.appendChild(tb);
-  var card=el("div",{class:"card"});card.appendChild(el("div",{class:"tablewrap"},t));
+  t.innerHTML="<thead><tr><th>Chỉ tiêu</th><th style='width:76px'>Mã số</th><th class=num style='width:170px'>Số tiền (₫)</th></tr></thead>"+
+    "<tbody>"+taxRowsHtml(vatDeclareRows(v),false)+"</tbody>";
+  var card=el("div",{class:"card"});card.appendChild(tw(t));
   m.appendChild(card);
   m.appendChild(el("p",{class:"lead",style:"margin-top:12px",html:
     "Số liệu tự động tổng hợp từ các phiếu mua/bán đã nhập trong kỳ. Đây là bảng tính hỗ trợ — vui lòng đối chiếu với ứng dụng eTax/HTKK của cơ quan thuế trước khi nộp chính thức."}));
 };
 function printVatDeclare(){
   var pr=P(),c=co(),v=vatDeclareCalc(pr.a,pr.b);
-  function r(code,label,val,bold){
-    return "<tr><td style='"+(bold?"font-weight:700":"")+"'>"+esc(label)+"</td><td style='text-align:center'>"+esc(code||"")+"</td>"+
-      "<td class=n style='"+(bold?"font-weight:700":"")+"'>"+fmt(val)+"</td></tr>";
-  }
-  var body=
-    r("[23]","Giá trị hàng hóa, dịch vụ mua vào (chưa thuế)",v.muaVaoGT)+
-    r("[24]","Thuế GTGT của hàng hóa, dịch vụ mua vào",v.muaVaoThue)+
-    r("[25]","Tổng số thuế GTGT được khấu trừ kỳ này",v.v25,1)+
-    r("[26]","Giá trị HHDV bán ra không chịu thuế GTGT",v.v26)+
-    r("[29]","Doanh thu thuế suất 0%",v.dt0)+
-    r("[30]","Doanh thu thuế suất 5%",v.dt5)+
-    r("[31]","Thuế GTGT thuế suất 5%",v.th5)+
-    r("[32]","Doanh thu thuế suất 10% (gồm phần giảm còn 8% theo NĐ 174/2025/NĐ-CP)",v.dtHigh)+
-    r("[33]","Thuế GTGT thuế suất 10%/8%",v.thHigh)+
-    r("[27]","Giá trị HHDV bán ra chịu thuế GTGT",v.v27,1)+
-    r("[34]","Tổng doanh thu HHDV bán ra",v.v34,1)+
-    r("[31]+[33]","Tổng thuế GTGT của HHDV bán ra",v.tongThueBanRa,1)+
-    r("[22]","Thuế GTGT còn được khấu trừ kỳ trước chuyển sang",v.kyTruoc)+
-    r("[36]","Thuế GTGT phát sinh trong kỳ",v.phatSinh,1)+
-    r("[37]","Điều chỉnh tăng thuế GTGT còn được khấu trừ các kỳ trước",v.dcTang)+
-    r("[38]","Điều chỉnh giảm thuế GTGT còn được khấu trừ các kỳ trước",v.dcGiam)+
-    r("[39a]","Thuế GTGT nhận bàn giao / từ dự án đầu tư",v.nhanBanGiao)+
-    r("[40b]","Thuế GTGT được bù trừ",v.buTru)+
-    r("[40]","THUẾ GTGT CÒN PHẢI NỘP TRONG KỲ",v.p40,1)+
-    r("[41]","Thuế GTGT chưa khấu trừ hết trong kỳ",v.p41)+
-    r("[42]","Số thuế đề nghị hoàn",v.deNghiHoan)+
-    r("[43]","Thuế GTGT còn được khấu trừ chuyển kỳ sau",v.p43,1);
-  var html="<div class=pdoc>"+coHeader("Mẫu số 01/GTGT — PL II, TT 89/2026/TT-BTC")+
+  var body=taxRowsHtml(vatDeclareRows(v),true);
+  var html="<div class=pdoc>"+coHeader("Mẫu số 01/GTGT — PL II, TT 89/2026/TT-BTC",true)+
     "<h3 class=pt>TỜ KHAI THUẾ GIÁ TRỊ GIA TĂNG</h3>"+
     "<div class=pt-sub>(Dành cho người nộp thuế tính thuế theo phương pháp khấu trừ)</div>"+
     "<div class=meta>"+
@@ -1294,7 +1326,7 @@ function printVatDeclare(){
     "<div>[05] Mã số thuế: <b>"+esc(c.mst||"")+"</b></div>"+
     "<div>Địa chỉ: "+esc(c.diaChi||"")+"</div>"+
     "</div>"+
-    "<table><thead><tr><th>Chỉ tiêu</th><th style='width:70px'>Mã số</th><th style='width:160px'>Số tiền (đồng)</th></tr></thead><tbody>"+body+"</tbody></table>"+
+    "<table><thead><tr><th>Chỉ tiêu</th><th style='width:70px'>Mã số</th><th style='width:130px'>Số tiền (đồng)</th></tr></thead><tbody>"+body+"</tbody></table>"+
     "<div class=treason>Số tiền thuế còn phải nộp bằng chữ: "+docTien(v.p40)+".</div>"+
     "<p style='font-size:9.5px;font-style:italic;margin-top:6px'>Bảng tính do phần mềm kế toán tự tổng hợp từ chứng từ mua/bán đã nhập trong kỳ, theo mẫu 01/GTGT ban hành kèm Thông tư 89/2026/TT-BTC ngày 30/6/2026 của Bộ Tài chính (thay thế Thông tư 80/2021/TT-BTC), áp dụng từ kỳ tính thuế 01/7/2026. Người nộp thuế có trách nhiệm đối chiếu, rà soát số liệu và kê khai chính thức qua ứng dụng eTax/HTKK của Tổng cục Thuế trước khi nộp.</p>"+
     sigBlock([["Người lập biểu",0,c.nguoiLapBieu],["Kế toán trưởng",0,c.keToanTruong],["Người nộp thuế / Đại diện pháp luật",1,c.chuHoTen]])+
@@ -1302,61 +1334,121 @@ function printVatDeclare(){
   openPrint(html);
 }
 
-/* ---------------- Tờ khai / bảng tính thuế TNDN — tham chiếu Mẫu 03/TNDN ---------------- */
+/* ---------------- Tờ khai / bảng tính thuế TNDN — tham chiếu Mẫu 03/TNDN
+   (Phụ lục II, Thông tư 89/2026/TT-BTC) — cấu trúc đầy đủ theo các nhóm chỉ tiêu A/B/C/D/E/G/I của tờ khai quyết toán năm,
+   thuế suất phổ thông/ưu đãi theo doanh thu năm trước liền kề (Nghị định 320/2025/NĐ-CP). */
+function citDeclareCalc(a,b){
+  var c=co(),r=kqkd(a,b);
+  var A1=r.truocThue;
+  var B1=num(c.citDieuChinhTang), B8=num(c.citDieuChinhGiam);
+  var B15=num(c.citThuNhapBDS);            // thu nhập từ chuyển nhượng bất động sản (đã gồm trong KQKD, tách riêng để tính thuế suất 20%)
+  var B13=A1+B1-B8;                        // tổng thu nhập chịu thuế (SXKD + BĐS + khác)
+  var B14=B13-B15;                         // thu nhập chịu thuế từ hoạt động SXKD (không kể BĐS)
+  var C1=B14;
+  var C2=num(c.citMienThue);               // thu nhập miễn thuế
+  var C3a=Math.min(Math.max(0,C1-C2),num(c.citLoKyTruoc));  // lỗ các kỳ trước chuyển sang (SXKD) — không vượt quá thu nhập còn lại
+  var C4=Math.max(0,C1-C2-C3a);            // thu nhập tính thuế (hoạt động SXKD)
+  var C5=Math.min(C4*0.10,Math.max(0,num(c.citTrichQuyKHCN))); // trích lập quỹ KH&CN, tối đa 10% thu nhập tính thuế
+  var C6=Math.max(0,C4-C5);
+  var C7=C6;                               // thu nhập tính thuế sau trích quỹ KH&CN
+  var thueSuat=r.thueSuat;
+  var C9=C7*thueSuat;                      // thuế TNDN từ SXKD theo thuế suất áp dụng
+  var C10=Math.min(C9,Math.max(0,num(c.citMienGiamThue))); // thuế TNDN được miễn, giảm trong kỳ
+  var C17=Math.max(0,C9-C10);              // thuế TNDN từ SXKD phải nộp sau ưu đãi
+  var loBDS=Math.max(0,num(c.citLoBDSBuTru));
+  var D6=Math.max(0,B15-loBDS);            // thu nhập tính thuế từ chuyển nhượng BĐS (sau bù trừ lỗ BĐS các kỳ trước, nếu có)
+  var D8=D6*0.20;                          // thuế TNDN từ chuyển nhượng BĐS — luôn thuế suất phổ thông 20%, không áp dụng ưu đãi
+  var E=C17+D8;                            // tổng số thuế TNDN phải nộp trong kỳ
+  var G=Math.max(0,num(c.citTamNopTrongNam)); // đã tạm nộp trong năm (quyết toán năm)
+  var I=E-G;                               // chênh lệch còn phải nộp (+) / nộp thừa (-)
+  return {A1:A1,B1:B1,B8:B8,B13:B13,B14:B14,B15:B15,C1:C1,C2:C2,C3a:C3a,C4:C4,C5:C5,C6:C6,C7:C7,
+    thueSuat:thueSuat,C9:C9,C10:C10,C17:C17,D6:D6,D8:D8,E:E,G:G,I:I,kqkd:r};
+}
+function citDeclareRows(t){
+  return [
+    {grp:"A. Xác định lợi nhuận, thu nhập chịu thuế"},
+    {code:"A1",label:"Tổng lợi nhuận kế toán trước thuế TNDN",val:t.A1,bold:1},
+    {grp:"B. Điều chỉnh tăng, giảm lợi nhuận"},
+    {code:"B1",label:"Tổng các khoản điều chỉnh TĂNG (chi phí không hợp lý, chưa đủ chứng từ...)",val:t.B1,sub:1},
+    {code:"B8",label:"Tổng các khoản điều chỉnh GIẢM",val:t.B8,sub:1},
+    {code:"B13",label:"Tổng thu nhập chịu thuế (SXKD + BĐS + khác)",val:t.B13,bold:1},
+    {code:"B15",label:"Trong đó: thu nhập từ chuyển nhượng bất động sản",val:t.B15,sub:1},
+    {code:"B14",label:"Thu nhập chịu thuế từ hoạt động SXKD (không kể BĐS)",val:t.B14,bold:1},
+    {grp:"C. Thuế TNDN từ hoạt động sản xuất kinh doanh"},
+    {code:"C1",label:"Thu nhập chịu thuế",val:t.C1,sub:1},
+    {code:"C2",label:"Thu nhập miễn thuế",val:t.C2,sub:1},
+    {code:"C3a",label:"Lỗ từ hoạt động SXKD các kỳ trước chuyển sang",val:t.C3a,sub:1},
+    {code:"C4",label:"Thu nhập tính thuế",val:t.C4,bold:1},
+    {code:"C5",label:"Trích lập quỹ phát triển KH&CN (≤10% thu nhập tính thuế)",val:t.C5,sub:1},
+    {code:"C7",label:"Thu nhập tính thuế sau trích quỹ KH&CN",val:t.C7,bold:1},
+    {code:"C8",label:"Thuế suất thuế TNDN áp dụng",val:t.thueSuat*100,pct:1},
+    {code:"C9",label:"Thuế TNDN từ SXKD theo thuế suất áp dụng",val:t.C9,sub:1},
+    {code:"C10",label:"Thuế TNDN được miễn, giảm trong kỳ",val:t.C10,sub:1},
+    {code:"C17",label:"Thuế TNDN từ SXKD phải nộp",val:t.C17,bold:1},
+    {grp:"D. Thuế TNDN từ chuyển nhượng bất động sản"},
+    {code:"D6",label:"Thu nhập tính thuế từ chuyển nhượng BĐS (sau bù trừ lỗ BĐS)",val:t.D6,sub:1},
+    {code:"D8",label:"Thuế TNDN từ chuyển nhượng BĐS (thuế suất phổ thông 20%)",val:t.D8,bold:1},
+    {grp:"E — G — I. Tổng hợp số thuế phải nộp"},
+    {code:"E",label:"TỔNG SỐ THUẾ TNDN PHẢI NỘP TRONG KỲ (C17 + D8)",val:t.E,bold:1},
+    {code:"G",label:"Số thuế TNDN đã tạm nộp trong năm",val:t.G,sub:1},
+    {code:"I",label:"Chênh lệch còn phải nộp (+) / nộp thừa (-)",val:t.I,bold:1}
+  ];
+}
 SCREENS.citdeclare=function(m){
-  var pr=P(),r=kqkd(pr.a,pr.b);
+  var pr=P(),c=co(),t=citDeclareCalc(pr.a,pr.b);
   m.appendChild(head("Bảng tính thuế TNDN (tham chiếu Mẫu 03/TNDN)",
-    "Kỳ "+dmy(pr.a)+" – "+dmy(pr.b)+" · thuế suất áp dụng "+Math.round(r.thueSuat*100)+"%",
+    "Kỳ "+dmy(pr.a)+" – "+dmy(pr.b)+" · thuế suất áp dụng "+Math.round(t.thueSuat*100)+"%",
     [toolbarBtn("In bảng tính",function(){printCitDeclare()})]
   ));
-  var rows=[
-    ["[A1]","Tổng lợi nhuận kế toán trước thuế TNDN",r.truocThue,1],
-    ["[B13]","Thu nhập chịu thuế từ sản xuất kinh doanh (chưa có điều chỉnh ưu đãi/chuyển lỗ)",Math.max(0,r.truocThue)],
-    ["[C4]","Thu nhập tính thuế",Math.max(0,r.truocThue)],
-    ["[C7]","Thuế suất thuế TNDN áp dụng",r.thueSuat*100],
-    ["[C9]/[C17]","THUẾ TNDN PHẢI NỘP",r.thue,1]
-  ];
-  var t=el("table",{class:"grid"});
-  t.innerHTML="<thead><tr><th>Chỉ tiêu</th><th style='width:70px'>Mã số</th><th class=num style='width:180px'>Giá trị</th></tr></thead>";
-  var tb=el("tbody");
-  rows.forEach(function(x){
-    var isPct=x[0]==="[C7]";
-    tb.innerHTML+="<tr><td style='"+(x[3]?"font-weight:700":"")+"'>"+esc(x[0])+"</td><td style='text-align:center'>"+esc(x[1])+"</td>"+
-      "<td class='num ro' style='"+(x[3]?"font-weight:700":"")+"'><span class=cell>"+(isPct?fmt2(x[2])+"%":fmt(x[2])+" ₫")+"</span></td></tr>";
-  });
-  t.appendChild(tb);
-  var card=el("div",{class:"card"});card.appendChild(el("div",{class:"tablewrap"},t));
+
+  var adj=el("div",{class:"card card-pad"});adj.style.marginBottom="16px";
+  adj.appendChild(el("div",{class:"sec-label",text:"Điều chỉnh lợi nhuận theo luật thuế TNDN",style:"margin-top:0"}));
+  var fg1=el("div",{class:"form-grid"});
+  [["[B1] Tổng điều chỉnh TĂNG (chi phí không hợp lý, không có/chưa đủ chứng từ...)","citDieuChinhTang"],
+   ["[B8] Tổng điều chỉnh GIẢM (thu nhập đã tính thuế ở nơi khác, đã nộp thuế...)","citDieuChinhGiam"],
+   ["[B15] Thu nhập từ chuyển nhượng bất động sản (đã gồm trong KQKD)","citThuNhapBDS"]]
+  .forEach(function(x){adjField(fg1,x[0],x[1]);});
+  adj.appendChild(fg1);
+  adj.appendChild(el("div",{class:"sec-label",text:"Miễn giảm, chuyển lỗ, trích quỹ (hoạt động SXKD)"}));
+  var fg2=el("div",{class:"form-grid"});
+  [["[C2] Thu nhập miễn thuế","citMienThue"],
+   ["[C3a] Lỗ các kỳ trước chuyển sang","citLoKyTruoc"],
+   ["[C5] Trích lập quỹ phát triển KH&CN (≤10% thu nhập tính thuế)","citTrichQuyKHCN"],
+   ["[C10] Thuế TNDN được miễn, giảm trong kỳ (ưu đãi đầu tư...)","citMienGiamThue"]]
+  .forEach(function(x){adjField(fg2,x[0],x[1]);});
+  adj.appendChild(fg2);
+  adj.appendChild(el("div",{class:"sec-label",text:"Bất động sản & tạm nộp trong năm"}));
+  var fg3=el("div",{class:"form-grid"});
+  [["Lỗ từ chuyển nhượng BĐS các kỳ trước chuyển sang","citLoBDSBuTru"],
+   ["[G] Số thuế TNDN đã tạm nộp trong năm","citTamNopTrongNam"]]
+  .forEach(function(x){adjField(fg3,x[0],x[1]);});
+  adj.appendChild(fg3);
+  m.appendChild(adj);
+
+  var tb=el("table",{class:"grid"});
+  tb.innerHTML="<thead><tr><th>Chỉ tiêu</th><th style='width:76px'>Mã số</th><th class=num style='width:170px'>Giá trị (₫)</th></tr></thead>"+
+    "<tbody>"+taxRowsHtml(citDeclareRows(t),false)+"</tbody>";
+  var card=el("div",{class:"card"});card.appendChild(tw(tb));
   m.appendChild(card);
   m.appendChild(el("p",{class:"lead",style:"margin-top:12px",html:
-    "Bảng rút gọn theo cấu trúc Mẫu 03/TNDN (Phụ lục II, Thông tư 89/2026/TT-BTC), dùng doanh thu/chi phí đã ghi nhận trong phần mềm. "+
-    "Chưa bao gồm các điều chỉnh riêng của tờ khai quyết toán năm (ưu đãi thuế, chuyển lỗ các năm trước, trích quỹ KH&CN, thu nhập từ chuyển nhượng bất động sản...) — "+
-    "nếu doanh nghiệp có các khoản này, cần bổ sung thủ công khi lập tờ khai chính thức trên ứng dụng eTax/HTKK."}));
+    "Bảng tính theo cấu trúc các nhóm chỉ tiêu A/B/C/D/E/G/I của Mẫu 03/TNDN (Phụ lục II, Thông tư 89/2026/TT-BTC), doanh thu/chi phí SXKD lấy tự động từ phần mềm, "+
+    "các khoản điều chỉnh riêng của thuế TNDN (ưu đãi, chuyển lỗ, trích quỹ KH&CN, chuyển nhượng BĐS...) nhập thủ công ở trên. "+
+    "Đây là bảng tính hỗ trợ — vui lòng đối chiếu và hoàn thiện tờ khai chính thức trên ứng dụng eTax/HTKK trước khi nộp."}));
 };
 function printCitDeclare(){
-  var pr=P(),c=co(),r=kqkd(pr.a,pr.b);
-  function rr(code,label,val,bold,pct){
-    return "<tr><td style='"+(bold?"font-weight:700":"")+"'>"+esc(label)+"</td><td style='text-align:center'>"+esc(code)+"</td>"+
-      "<td class=n style='"+(bold?"font-weight:700":"")+"'>"+(pct?fmt2(val)+"%":fmt(val))+"</td></tr>";
-  }
-  var body=
-    rr("[A1]","Tổng lợi nhuận kế toán trước thuế TNDN",r.truocThue,1)+
-    rr("[B1]-[B8]","Điều chỉnh tăng/giảm theo luật thuế TNDN (chưa phát sinh)",0)+
-    rr("[B13]","Thu nhập chịu thuế từ hoạt động SXKD",Math.max(0,r.truocThue),1)+
-    rr("[C2]","Thu nhập miễn thuế",0)+
-    rr("[C3a]","Lỗ các kỳ trước chuyển sang",0)+
-    rr("[C4]","Thu nhập tính thuế",Math.max(0,r.truocThue),1)+
-    rr("[C7]","Thuế suất thuế TNDN áp dụng (%)",r.thueSuat*100,0,1)+
-    rr("[C9]/[C17]","THUẾ TNDN PHẢI NỘP TRONG KỲ",r.thue,1);
-  var html="<div class=pdoc>"+coHeader("Mẫu số 03/TNDN (rút gọn) — PL II, TT 89/2026/TT-BTC")+
-    "<h3 class=pt>BẢNG TÍNH THUẾ THU NHẬP DOANH NGHIỆP</h3>"+
-    "<div class=pt-sub>Kỳ: từ "+dmy(pr.a)+" đến "+dmy(pr.b)+" &nbsp;·&nbsp; Đơn vị tính: đồng</div>"+
+  var pr=P(),c=co(),t=citDeclareCalc(pr.a,pr.b);
+  var body=taxRowsHtml(citDeclareRows(t),true);
+  var html="<div class=pdoc>"+coHeader("Mẫu số 03/TNDN — PL II, TT 89/2026/TT-BTC",true)+
+    "<h3 class=pt>TỜ KHAI QUYẾT TOÁN THUẾ THU NHẬP DOANH NGHIỆP</h3>"+
+    "<div class=pt-sub>Kỳ tính thuế: từ "+dmy(pr.a)+" đến "+dmy(pr.b)+" &nbsp;·&nbsp; Đơn vị tính: đồng Việt Nam</div>"+
     "<div class=meta>"+
     "<div>Người nộp thuế: <b>"+esc(c.ten||"")+"</b> &nbsp;·&nbsp; MST: <b>"+esc(c.mst||"")+"</b></div>"+
+    "<div>Địa chỉ: "+esc(c.diaChi||"")+"</div>"+
     "<div>Căn cứ thuế suất: doanh thu năm trước liền kề "+fmt(c.dtNamTruoc)+" ₫ (Nghị định 320/2025/NĐ-CP)"+(num(c.dtNamTruoc)<=0?" — chưa nhập, đang dùng thuế suất thủ công":"")+"</div>"+
     "</div>"+
-    "<table><thead><tr><th>Chỉ tiêu</th><th style='width:80px'>Mã số</th><th style='width:160px'>Giá trị</th></tr></thead><tbody>"+body+"</tbody></table>"+
-    "<div class=treason>Số thuế TNDN phải nộp bằng chữ: "+docTien(r.thue)+".</div>"+
-    "<p style='font-size:9.5px;font-style:italic;margin-top:6px'>Bảng tính rút gọn do phần mềm tự tổng hợp, tham chiếu cấu trúc Mẫu 03/TNDN ban hành kèm Thông tư 89/2026/TT-BTC (thay thế Thông tư 80/2021/TT-BTC) và thuế suất theo Nghị định 320/2025/NĐ-CP. Chưa gồm các phụ lục ưu đãi thuế, chuyển lỗ, trích quỹ KH&CN... Vui lòng hoàn thiện tờ khai chính thức trên eTax/HTKK trước khi nộp.</p>"+
+    "<table><thead><tr><th>Chỉ tiêu</th><th style='width:80px'>Mã số</th><th style='width:130px'>Giá trị</th></tr></thead><tbody>"+body+"</tbody></table>"+
+    "<div class=treason>Số thuế TNDN còn phải nộp bằng chữ: "+docTien(Math.max(0,t.I))+".</div>"+
+    "<p style='font-size:9.5px;font-style:italic;margin-top:6px'>Bảng tính do phần mềm kế toán tự tổng hợp, tham chiếu cấu trúc các nhóm chỉ tiêu A/B/C/D/E/G/I của Mẫu 03/TNDN ban hành kèm Thông tư 89/2026/TT-BTC (thay thế Thông tư 80/2021/TT-BTC) và thuế suất theo Nghị định 320/2025/NĐ-CP. Người nộp thuế có trách nhiệm đối chiếu số liệu và hoàn thiện tờ khai chính thức trên ứng dụng eTax/HTKK của Tổng cục Thuế trước khi nộp.</p>"+
     sigBlock([["Người lập biểu",0,c.nguoiLapBieu],["Kế toán trưởng",0,c.keToanTruong],["Người đại diện pháp luật",1,c.chuHoTen]])+
     licLine()+"</div>";
   openPrint(html);
@@ -1376,7 +1468,7 @@ function summaryTable(n,fn){
   t.appendChild(tb);
   var tf=el("tfoot");tf.innerHTML="<tr><td>CỘNG</td><td class=num>"+fmt(F.d)+"</td><td class=num>"+fmt(F.g)+"</td><td class=num>"+fmt(F.l)+"</td><td class=num>"+fmt(F.c)+"</td><td class=num>"+fmt(F.t)+"</td></tr>";
   t.appendChild(tf);
-  return el("div",{class:"tablewrap"},t);
+  return tw(t);
 }
 
 function simpleGrid(m,title,sub,cols,key,mk,foot){
@@ -1410,14 +1502,14 @@ function printPicker(key,field,fn){
 }
 
 /* ---------------- print documents ---------------- */
-function coHeader(formNo){
+function coHeader(formNo,isTaxForm){
   var c=co();
   return "<div class=co><div><div class=co-name>"+esc(c.ten||"")+"</div>"+
     (c.tenVietTat&&c.tenVietTat!==c.ten?"<div>"+esc(c.tenVietTat)+"</div>":"")+
     "<div>"+esc(c.diaChi||"")+"</div>"+
     "<div>MST: "+esc(c.mst||"")+(c.dienThoai?" &nbsp;·&nbsp; ĐT: "+esc(c.dienThoai):"")+"</div>"+
     (c.soTaiKhoan?"<div>TK: "+esc(c.soTaiKhoan)+" - "+esc(c.nganHang||"")+"</div>":"")+
-    "</div><div class=form-no>"+esc(formNo||"")+"<br>("+esc(c.cheDoKeToan||"")+")</div></div>";
+    "</div><div class=form-no>"+esc(formNo||"")+(isTaxForm?"":"<br>("+esc(c.cheDoKeToan||"")+")")+"</div></div>";
 }
 function sigBlock(cols){
   return "<div class=sig>"+cols.map(function(s){return "<div><b>"+esc(s[0])+"</b><i>(Ký, họ tên"+(s[1]?", đóng dấu":"")+")</i>"+(s[2]?"<div style='margin-top:34px'>"+esc(s[2])+"</div>":"<div style='height:46px'></div>")+"</div>"}).join("")+"</div>";
